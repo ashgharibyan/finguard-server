@@ -19,25 +19,37 @@ namespace finguard_server.Controllers
 
         // GET: api/Users
         [HttpGet]
-        public async Task<IActionResult> GetUsers()
+        public async Task<ActionResult<IEnumerable<UserReadDto>>> GetUsers()
         {
             var users = await _context.Users.Include(u => u.Expenses).ToListAsync();
-            return Ok(users);
+
+            var userDtos = users.Select(user => new UserReadDto
+            {
+                Id = user.Id,
+                Username = user.Username,
+                Email = user.Email,
+                Expenses = user.Expenses.Select(e => new ExpenseDto
+                {
+                    Id = e.Id,
+                    Description = e.Description,
+                    Amount = e.Amount,
+                    Date = e.Date
+                }).ToList()
+            });
+
+            return Ok(userDtos);
         }
 
+        // GET: api/Users/{id}
         [HttpGet("{id}")]
         public async Task<ActionResult<UserReadDto>> GetUserById(int id)
         {
-            var user = await _context.Users
-                .Include(u => u.Expenses)
-                .FirstOrDefaultAsync(u => u.Id == id);
+            var user = await _context.Users.Include(u => u.Expenses).FirstOrDefaultAsync(u => u.Id == id);
 
             if (user == null)
-            {
-                return NotFound();
-            }
+                return NotFound("User not found.");
 
-            var userReadDto = new UserReadDto
+            var userDto = new UserReadDto
             {
                 Id = user.Id,
                 Username = user.Username,
@@ -51,21 +63,23 @@ namespace finguard_server.Controllers
                 }).ToList()
             };
 
-            return Ok(userReadDto);
+            return Ok(userDto);
         }
 
-
+        // POST: api/Users
         [HttpPost]
         public async Task<ActionResult<UserReadDto>> CreateUser(UserCreateDto userDto)
         {
-            // Hash the plain text password
+            if (await _context.Users.AnyAsync(u => u.Email == userDto.Email))
+                return Conflict("A user with this email already exists.");
+
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(userDto.Password);
 
             var user = new User
             {
                 Username = userDto.Username,
                 Email = userDto.Email,
-                PasswordHash = passwordHash, // Save the hashed password
+                PasswordHash = passwordHash
             };
 
             _context.Users.Add(user);
@@ -76,31 +90,22 @@ namespace finguard_server.Controllers
                 Id = user.Id,
                 Username = user.Username,
                 Email = user.Email,
-                Expenses = new List<ExpenseDto>() // No expenses yet
+                Expenses = new List<ExpenseDto>()
             };
 
             return CreatedAtAction(nameof(GetUserById), new { id = user.Id }, userReadDto);
         }
 
+        // POST: api/Users/login
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(UserLoginDto loginDto)
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
-            if (user == null)
-            {
+            if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
                 return Unauthorized("Invalid email or password.");
-            }
-
-            // Verify the password
-            if (!BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
-            {
-                return Unauthorized("Invalid email or password.");
-            }
 
             return Ok("Login successful!");
         }
-
-
     }
 }

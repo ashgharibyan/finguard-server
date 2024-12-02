@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace FinguardServer.Dtos
 {
     public class UserReadDto
