@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using finguard_server.Data;
 
@@ -10,9 +11,11 @@ using finguard_server.Data;
 namespace finguard_server.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20241202202914_UpdateModelsWithDefaults")]
+    partial class UpdateModelsWithDefaults
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
@@ -50,10 +53,6 @@ namespace finguard_server.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Email")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

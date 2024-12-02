@@ -7,6 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite("Data Source=finguard.db")); // SQLite database file
 
+builder.Services.AddControllers(); // Register controllers
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -20,5 +21,7 @@ if (app.Environment.IsDevelopment())
 }
 
 // app.UseHttpsRedirection();
+
+app.MapControllers(); // Map controller routes
 
 app.Run();
