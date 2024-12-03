@@ -1,8 +1,14 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using finguard_server.Data;
 using finguard_server.Models;
 using FinguardServer.Dtos;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace finguard_server.Controllers
 {
@@ -11,67 +17,61 @@ namespace finguard_server.Controllers
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IConfiguration _configuration;
 
-        public UsersController(AppDbContext context)
+        public UsersController(AppDbContext context, IConfiguration configuration)
         {
             _context = context;
+            _configuration = configuration;
         }
 
-        // GET: api/Users
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<UserReadDto>>> GetUsers()
+        [HttpPost("login")]
+        public async Task<ActionResult<string>> Login(UserLoginDto loginDto)
         {
-            var users = await _context.Users.Include(u => u.Expenses).ToListAsync();
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == loginDto.Email);
 
-            var userDtos = users.Select(user => new UserReadDto
+            if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
             {
-                Id = user.Id,
-                Username = user.Username,
-                Email = user.Email,
-                Expenses = user.Expenses.Select(e => new ExpenseDto
-                {
-                    Id = e.Id,
-                    Description = e.Description,
-                    Amount = e.Amount,
-                    Date = e.Date
-                }).ToList()
-            });
+                return Unauthorized("Invalid email or password.");
+            }
 
-            return Ok(userDtos);
+            var token = GenerateJwtToken(user);
+            return Ok(new { Token = token });
         }
 
-        // GET: api/Users/{id}
-        [HttpGet("{id}")]
-        public async Task<ActionResult<UserReadDto>> GetUserById(int id)
+        private string GenerateJwtToken(User user)
         {
-            var user = await _context.Users.Include(u => u.Expenses).FirstOrDefaultAsync(u => u.Id == id);
+            var jwtSettings = _configuration.GetSection("JwtSettings");
+            var key = Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is not configured."));
 
-            if (user == null)
-                return NotFound("User not found.");
-
-            var userDto = new UserReadDto
+            var claims = new[]
             {
-                Id = user.Id,
-                Username = user.Username,
-                Email = user.Email,
-                Expenses = user.Expenses.Select(e => new ExpenseDto
-                {
-                    Id = e.Id,
-                    Description = e.Description,
-                    Amount = e.Amount,
-                    Date = e.Date
-                }).ToList()
+                new Claim(JwtRegisteredClaimNames.Sub, user.Email),
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim("id", user.Id.ToString()),
+                new Claim("username", user.Username)
             };
 
-            return Ok(userDto);
+            var creds = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256);
+
+            var token = new JwtSecurityToken(
+                issuer: jwtSettings["Issuer"],
+                audience: jwtSettings["Audience"],
+                claims: claims,
+                expires: DateTime.UtcNow.AddMinutes(double.Parse(jwtSettings["ExpiryMinutes"] ?? "60")),
+                signingCredentials: creds);
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        // POST: api/Users
         [HttpPost]
         public async Task<ActionResult<UserReadDto>> CreateUser(UserCreateDto userDto)
         {
-            if (await _context.Users.AnyAsync(u => u.Email == userDto.Email))
-                return Conflict("A user with this email already exists.");
+            var userExists = await _context.Users.AnyAsync(u => u.Email == userDto.Email);
+            if (userExists)
+            {
+                return BadRequest("User with this email already exists.");
+            }
 
             var passwordHash = BCrypt.Net.BCrypt.HashPassword(userDto.Password);
 
@@ -79,7 +79,7 @@ namespace finguard_server.Controllers
             {
                 Username = userDto.Username,
                 Email = userDto.Email,
-                PasswordHash = passwordHash
+                PasswordHash = passwordHash,
             };
 
             _context.Users.Add(user);
@@ -96,16 +96,32 @@ namespace finguard_server.Controllers
             return CreatedAtAction(nameof(GetUserById), new { id = user.Id }, userReadDto);
         }
 
-        // POST: api/Users/login
-        [HttpPost("login")]
-        public async Task<ActionResult<string>> Login(UserLoginDto loginDto)
+        [HttpGet("{id}")]
+        [Authorize]
+        public async Task<ActionResult<UserReadDto>> GetUserById(int id)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == loginDto.Email);
+            var user = await _context.Users.Include(u => u.Expenses).FirstOrDefaultAsync(u => u.Id == id);
 
-            if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
-                return Unauthorized("Invalid email or password.");
+            if (user == null)
+            {
+                return NotFound();
+            }
 
-            return Ok("Login successful!");
+            var userReadDto = new UserReadDto
+            {
+                Id = user.Id,
+                Username = user.Username,
+                Email = user.Email,
+                Expenses = user.Expenses.Select(e => new ExpenseDto
+                {
+                    Id = e.Id,
+                    Description = e.Description,
+                    Amount = e.Amount,
+                    Date = e.Date
+                }).ToList()
+            };
+
+            return Ok(userReadDto);
         }
     }
 }

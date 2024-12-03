@@ -3,9 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using finguard_server.Data;
 using finguard_server.Models;
 using FinguardServer.Dtos;
+using Microsoft.AspNetCore.Authorization;
 
 namespace finguard_server.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class ExpensesController : ControllerBase
@@ -17,7 +19,9 @@ namespace finguard_server.Controllers
             _context = context;
         }
 
+
         // GET: api/Expenses
+
         [HttpGet]
         public async Task<ActionResult<IEnumerable<ExpenseDto>>> GetExpenses()
         {
