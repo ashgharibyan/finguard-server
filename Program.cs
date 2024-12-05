@@ -25,7 +25,7 @@ var connectionString = new NpgsqlConnectionStringBuilder
     Password = "tnY10UABIy8qWUbs",
     Database = "postgres",
     SslMode = SslMode.Require,
-    CommandTimeout = 300
+
 }.ToString();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
