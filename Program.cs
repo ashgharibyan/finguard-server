@@ -32,7 +32,8 @@ var connectionString = Environment.GetEnvironmentVariable("PGHOST") != null
       $"Database={Environment.GetEnvironmentVariable("PGDATABASE")};" +
       $"Username={Environment.GetEnvironmentVariable("PGUSER")};" +
       $"Password={Environment.GetEnvironmentVariable("PGPASSWORD")};" +
-      $"Port={Environment.GetEnvironmentVariable("PGPORT")}"
+      $"Port={Environment.GetEnvironmentVariable("PGPORT")};" +
+      "Pooling=true;SSL Mode=Require;Trust Server Certificate=true"
     : "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
