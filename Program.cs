@@ -58,13 +58,22 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// JWT Configuration - Simplified direct approach
-var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY");
+// JWT Configuration - Updated to use both environment variables and appsettings.json
+var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") ?? builder.Configuration["JwtSettings:Key"];
+var jwtIssuer = builder.Configuration["JwtSettings:Issuer"];
+var jwtAudience = builder.Configuration["JwtSettings:Audience"];
+
+// Update configuration if environment variable is present
+if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("JWT_KEY")))
+{
+    builder.Configuration["JwtSettings:Key"] = jwtKey;
+}
+
 Console.WriteLine($"JWT Key length: {jwtKey?.Length ?? 0}");  // Log key length for debugging
 
 if (string.IsNullOrEmpty(jwtKey))
 {
-    throw new InvalidOperationException("JWT_KEY environment variable is not set");
+    throw new InvalidOperationException("JWT Key is not configured. Please set it in appsettings.json or JWT_KEY environment variable");
 }
 
 var key = Encoding.UTF8.GetBytes(jwtKey);
@@ -80,8 +89,10 @@ builder.Services.AddAuthentication(options =>
     {
         ValidateIssuerSigningKey = true,
         IssuerSigningKey = new SymmetricSecurityKey(key),
-        ValidateIssuer = false,  // Changed to false since we don't have issuer config
-        ValidateAudience = false, // Changed to false since we don't have audience config
+        ValidateIssuer = !string.IsNullOrEmpty(jwtIssuer),
+        ValidateAudience = !string.IsNullOrEmpty(jwtAudience),
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
