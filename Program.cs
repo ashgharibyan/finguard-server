@@ -4,7 +4,6 @@ using Microsoft.IdentityModel.Tokens;
 using finguard_server.Data;
 using System.Text;
 using Microsoft.OpenApi.Models;
-using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,20 +11,11 @@ var builder = WebApplication.CreateBuilder(args);
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-// Log environment variables for debugging
-Console.WriteLine("Environment Variables:");
-Console.WriteLine($"DATABASE_URL: {Environment.GetEnvironmentVariable("DATABASE_URL")}");
-
-// var connectionString = Environment.GetEnvironmentVariable("PGHOST") != null
-//     ? $"Host={Environment.GetEnvironmentVariable("PGHOST")};" +
-//       $"Database={Environment.GetEnvironmentVariable("PGDATABASE")};" +
-//       $"Username={Environment.GetEnvironmentVariable("PGUSER")};" +
-//       $"Password={Environment.GetEnvironmentVariable("PGPASSWORD")};" +
-//       $"Port={Environment.GetEnvironmentVariable("PGPORT")}"
-//     : "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
+// Build the PostgreSQL connection string using Railway environment variables
+var connectionString = BuildConnectionString();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(Environment.GetEnvironmentVariable("DATABASE_URL")));
+    options.UseNpgsql(connectionString));
 
 // Add Controllers and Swagger
 builder.Services.AddControllers();
@@ -140,3 +130,15 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static string BuildConnectionString()
+{
+    // Use Railway environment variables to build the connection string
+    var host = Environment.GetEnvironmentVariable("PGHOST") ?? throw new InvalidOperationException("PGHOST is not set");
+    var port = Environment.GetEnvironmentVariable("PGPORT") ?? "5432";
+    var username = Environment.GetEnvironmentVariable("PGUSER") ?? throw new InvalidOperationException("PGUSER is not set");
+    var password = Environment.GetEnvironmentVariable("PGPASSWORD") ?? throw new InvalidOperationException("PGPASSWORD is not set");
+    var database = Environment.GetEnvironmentVariable("PGDATABASE") ?? throw new InvalidOperationException("PGDATABASE is not set");
+
+    return $"Server={host};Port={port};User Id={username};Password={password};Database={database};SslMode=Require;TrustServerCertificate=True";
+}
