@@ -4,9 +4,11 @@ using Microsoft.IdentityModel.Tokens;
 using finguard_server.Data;
 using System.Text;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Log all environment variables
 Console.WriteLine("Environment Variables:");
 foreach (var keyvar in Environment.GetEnvironmentVariables().Keys)
 {
@@ -56,23 +58,16 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// JWT Configuration - Simplified direct approach
+var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY");
+Console.WriteLine($"JWT Key length: {jwtKey?.Length ?? 0}");  // Log key length for debugging
 
+if (string.IsNullOrEmpty(jwtKey))
+{
+    throw new InvalidOperationException("JWT_KEY environment variable is not set");
+}
 
-// JWT Configuration
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var key = Encoding.UTF8.GetBytes(
-    Environment.GetEnvironmentVariable("JWT_KEY") ??
-    jwtSettings["Key"] ??
-    throw new InvalidOperationException("JWT Key is not configured."));
-
-
-Console.WriteLine("--------------------------------------");
-Console.WriteLine("--------------------------------------");
-Console.WriteLine("--------------------------------------");
-Console.WriteLine($"JWT Key retrieved:", Environment.GetEnvironmentVariable("JWT_KEY"));
-Console.WriteLine($"HOSTretrieved:", Environment.GetEnvironmentVariable("PGHOST"));
-Console.WriteLine($"PGUSER retrieved:", Environment.GetEnvironmentVariable("PGUSER"));
-Console.WriteLine($"PGDATABASE retrieved:", Environment.GetEnvironmentVariable("PGDATABASE"));
+var key = Encoding.UTF8.GetBytes(jwtKey);
 
 builder.Services.AddAuthentication(options =>
 {
@@ -83,13 +78,12 @@ builder.Services.AddAuthentication(options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(key)
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ValidateIssuer = false,  // Changed to false since we don't have issuer config
+        ValidateAudience = false, // Changed to false since we don't have audience config
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
     };
 });
 
@@ -110,6 +104,28 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Add global exception handling
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        var exceptionHandlerPathFeature = context.Features.Get<IExceptionHandlerPathFeature>();
+        if (exceptionHandlerPathFeature?.Error != null)
+        {
+            var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError(exceptionHandlerPathFeature.Error, "An unhandled exception occurred");
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "An internal server error occurred.",
+                details = app.Environment.IsDevelopment() ? exceptionHandlerPathFeature.Error.Message : null
+            });
+        }
+    });
+});
+
+// Database initialization
 try
 {
     using (var scope = app.Services.CreateScope())
@@ -139,9 +155,19 @@ catch (Exception ex)
     throw;
 }
 
+// Middleware configuration
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseCors("AllowFrontend");
+
+// Add request logging middleware
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation($"Incoming {context.Request.Method} request to {context.Request.Path}");
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -150,15 +176,19 @@ app.Run();
 
 static string BuildConnectionString()
 {
-    // Use Railway environment variables to build the connection string
+    // First try to use the complete DATABASE_URL if available
+    var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+    if (!string.IsNullOrEmpty(databaseUrl))
+    {
+        return databaseUrl;
+    }
+
+    // Fallback to building from individual components
     var host = Environment.GetEnvironmentVariable("PGHOST") ?? throw new InvalidOperationException("PGHOST is not set");
     var port = Environment.GetEnvironmentVariable("PGPORT") ?? "5432";
     var username = Environment.GetEnvironmentVariable("PGUSER") ?? throw new InvalidOperationException("PGUSER is not set");
     var password = Environment.GetEnvironmentVariable("PGPASSWORD") ?? throw new InvalidOperationException("PGPASSWORD is not set");
     var database = Environment.GetEnvironmentVariable("PGDATABASE") ?? throw new InvalidOperationException("PGDATABASE is not set");
-
-    Console.WriteLine("--------------------------------------");
-    Console.WriteLine("Adasdasdsadsad", host, port, username, password, database);
 
     return $"Server={host};Port={port};User Id={username};Password={password};Database={database};SslMode=Require;TrustServerCertificate=True";
 }
