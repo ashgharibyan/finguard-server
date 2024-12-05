@@ -11,23 +11,25 @@ var builder = WebApplication.CreateBuilder(args);
 // var port = Environment.GetEnvironmentVariable("PORT") ?? "5064"; // Change to 5064 for consistency
 // builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
+// Local PostgreSQL connection string
+// var connectionString = "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
+
 // Configure port for Railway
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-// Local PostgreSQL connection string
-// var connectionString = "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
-
-
-// PostgreSQL Configuration
-var connectionString = $"Host={Environment.GetEnvironmentVariable("PGHOST")};" +
-                      $"Database={Environment.GetEnvironmentVariable("PGDATABASE")};" +
-                      $"Username={Environment.GetEnvironmentVariable("PGUSER")};" +
-                      $"Password={Environment.GetEnvironmentVariable("PGPASSWORD")};" +
-                      $"Port={Environment.GetEnvironmentVariable("PGPORT")}";
+// PostgreSQL Configuration - use environment variables for Railway
+var connectionString = Environment.GetEnvironmentVariable("PGHOST") != null
+    ? $"Host={Environment.GetEnvironmentVariable("PGHOST")};" +
+      $"Database={Environment.GetEnvironmentVariable("PGDATABASE")};" +
+      $"Username={Environment.GetEnvironmentVariable("PGUSER")};" +
+      $"Password={Environment.GetEnvironmentVariable("PGPASSWORD")};" +
+      $"Port={Environment.GetEnvironmentVariable("PGPORT")}"
+    : "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
+
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
