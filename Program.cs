@@ -94,6 +94,13 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var context = services.GetRequiredService<AppDbContext>();
+    context.Database.Migrate(); // This will create the database and apply migrations
+}
+
 // Enable Swagger in all environments for now
 app.UseSwagger();
 app.UseSwaggerUI();
