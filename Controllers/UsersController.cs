@@ -69,7 +69,7 @@ namespace finguard_server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during registration");
-                return StatusCode(500, "An error occurred during registration.");
+                return StatusCode(500, "An error occurred during registration2.");
             }
         }
 
@@ -144,7 +144,14 @@ namespace finguard_server.Controllers
             try
             {
                 var jwtSettings = _configuration.GetSection("JwtSettings");
-                var key = Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? "YourDefaultDevKey");
+                var key = _configuration["JwtSettings:Key"];
+                Console.WriteLine($"JWT Key from app settings:", key);
+
+                if (string.IsNullOrEmpty(key))
+                {
+                    _logger.LogError("JWT Key is missing from configuration");
+                    throw new InvalidOperationException("JWT Key is not configured.");
+                }
 
                 _logger.LogInformation("Generating JWT for user: {UserId}, {Email}", user.Id, user.Email);
 
@@ -159,8 +166,8 @@ namespace finguard_server.Controllers
                     issuer: jwtSettings["Issuer"],
                     audience: jwtSettings["Audience"],
                     claims: claims,
-                    expires: DateTime.UtcNow.AddHours(24),
-                    signingCredentials: new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256)
+                    expires: DateTime.UtcNow.AddMinutes(Convert.ToInt32(jwtSettings["ExpiryMinutes"] ?? "60")),
+                    signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256)
                 );
 
                 _logger.LogInformation("Token successfully generated for user: {UserId}", user.Id);
@@ -172,6 +179,7 @@ namespace finguard_server.Controllers
                 throw;
             }
         }
+
 
     }
 }

@@ -50,12 +50,17 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+
+
 // JWT Configuration
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var key = Encoding.UTF8.GetBytes(
     Environment.GetEnvironmentVariable("JWT_KEY") ??
     jwtSettings["Key"] ??
     throw new InvalidOperationException("JWT Key is not configured."));
+
+
+Console.WriteLine($"JWT Key retrieved:", Environment.GetEnvironmentVariable("JWT_KEY"));
 
 builder.Services.AddAuthentication(options =>
 {
