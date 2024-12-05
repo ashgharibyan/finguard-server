@@ -151,5 +151,8 @@ static string BuildConnectionString()
     var password = Environment.GetEnvironmentVariable("PGPASSWORD") ?? throw new InvalidOperationException("PGPASSWORD is not set");
     var database = Environment.GetEnvironmentVariable("PGDATABASE") ?? throw new InvalidOperationException("PGDATABASE is not set");
 
+    Console.WriteLine("--------------------------------------");
+    Console.WriteLine(host, port, username, password, database);
+
     return $"Server={host};Port={port};User Id={username};Password={password};Database={database};SslMode=Require;TrustServerCertificate=True";
 }
