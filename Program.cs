@@ -176,19 +176,15 @@ app.Run();
 
 static string BuildConnectionString()
 {
-    // First try to use the complete DATABASE_URL if available
-    var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-    if (!string.IsNullOrEmpty(databaseUrl))
-    {
-        return databaseUrl;
-    }
-
-    // Fallback to building from individual components
+    // Use Railway environment variables to build the connection string
     var host = Environment.GetEnvironmentVariable("PGHOST") ?? throw new InvalidOperationException("PGHOST is not set");
     var port = Environment.GetEnvironmentVariable("PGPORT") ?? "5432";
     var username = Environment.GetEnvironmentVariable("PGUSER") ?? throw new InvalidOperationException("PGUSER is not set");
     var password = Environment.GetEnvironmentVariable("PGPASSWORD") ?? throw new InvalidOperationException("PGPASSWORD is not set");
     var database = Environment.GetEnvironmentVariable("PGDATABASE") ?? throw new InvalidOperationException("PGDATABASE is not set");
+
+    Console.WriteLine("--------------------------------------");
+    Console.WriteLine("Adasdasdsadsad", host, port, username, password, database);
 
     return $"Server={host};Port={port};User Id={username};Password={password};Database={database};SslMode=Require;TrustServerCertificate=True";
 }
