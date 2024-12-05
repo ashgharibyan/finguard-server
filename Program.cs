@@ -60,7 +60,13 @@ var key = Encoding.UTF8.GetBytes(
     throw new InvalidOperationException("JWT Key is not configured."));
 
 
+Console.WriteLine("--------------------------------------");
+Console.WriteLine("--------------------------------------");
+Console.WriteLine("--------------------------------------");
 Console.WriteLine($"JWT Key retrieved:", Environment.GetEnvironmentVariable("JWT_KEY"));
+Console.WriteLine($"HOSTretrieved:", Environment.GetEnvironmentVariable("PGHOST"));
+Console.WriteLine($"PGUSER retrieved:", Environment.GetEnvironmentVariable("PGUSER"));
+Console.WriteLine($"PGDATABASE retrieved:", Environment.GetEnvironmentVariable("PGDATABASE"));
 
 builder.Services.AddAuthentication(options =>
 {
