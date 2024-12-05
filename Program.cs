@@ -15,12 +15,14 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 Console.WriteLine("Environment Variables:");
 Console.WriteLine($"DATABASE_URL: {Environment.GetEnvironmentVariable("DATABASE_URL")}");
 
-// PostgreSQL Configuration using DATABASE_URL
+// Parse DATABASE_URL into a standard connection string
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL")
     ?? throw new InvalidOperationException("DATABASE_URL is not configured.");
 
+var connectionString = ParseDatabaseUrl(databaseUrl);
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(databaseUrl));
+    options.UseNpgsql(connectionString));
 
 // Add Controllers and Swagger
 builder.Services.AddControllers();
@@ -135,3 +137,16 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static string ParseDatabaseUrl(string databaseUrl)
+{
+    var uri = new Uri(databaseUrl);
+    var userInfo = uri.UserInfo.Split(':');
+
+    return $"Host={uri.Host};" +
+           $"Port={uri.Port};" +
+           $"Username={userInfo[0]};" +
+           $"Password={userInfo[1]};" +
+           $"Database={uri.AbsolutePath.TrimStart('/')};" +
+           "SSL Mode=Require;Trust Server Certificate=true";
+}
