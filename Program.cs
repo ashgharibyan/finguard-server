@@ -7,39 +7,22 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Local
-// var port = Environment.GetEnvironmentVariable("PORT") ?? "5064"; // Change to 5064 for consistency
-// builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
-
-// Local PostgreSQL connection string
-// var connectionString = "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
-
 // Configure port for Railway
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-// Add this before the connection string setup
+// Log environment variables for debugging
 Console.WriteLine("Environment Variables:");
-Console.WriteLine($"PGHOST: {Environment.GetEnvironmentVariable("PGHOST")}");
-Console.WriteLine($"PGDATABASE: {Environment.GetEnvironmentVariable("PGDATABASE")}");
-Console.WriteLine($"PGUSER: {Environment.GetEnvironmentVariable("PGUSER")}");
-Console.WriteLine($"PGPORT: {Environment.GetEnvironmentVariable("PGPORT")}");
 Console.WriteLine($"DATABASE_URL: {Environment.GetEnvironmentVariable("DATABASE_URL")}");
 
-// PostgreSQL Configuration - use environment variables for Railway
-var connectionString = Environment.GetEnvironmentVariable("PGHOST") != null
-    ? $"Host={Environment.GetEnvironmentVariable("PGHOST")};" +
-      $"Database={Environment.GetEnvironmentVariable("PGDATABASE")};" +
-      $"Username={Environment.GetEnvironmentVariable("PGUSER")};" +
-      $"Password={Environment.GetEnvironmentVariable("PGPASSWORD")};" +
-      $"Port={Environment.GetEnvironmentVariable("PGPORT")};" +
-      "Pooling=true;SSL Mode=Require;Trust Server Certificate=true"
-    : "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
+// PostgreSQL Configuration using DATABASE_URL
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? throw new InvalidOperationException("DATABASE_URL is not configured.");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(databaseUrl));
 
-
+// Add Controllers and Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
