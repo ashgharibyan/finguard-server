@@ -18,6 +18,14 @@ var builder = WebApplication.CreateBuilder(args);
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
+// Add this before the connection string setup
+Console.WriteLine("Environment Variables:");
+Console.WriteLine($"PGHOST: {Environment.GetEnvironmentVariable("PGHOST")}");
+Console.WriteLine($"PGDATABASE: {Environment.GetEnvironmentVariable("PGDATABASE")}");
+Console.WriteLine($"PGUSER: {Environment.GetEnvironmentVariable("PGUSER")}");
+Console.WriteLine($"PGPORT: {Environment.GetEnvironmentVariable("PGPORT")}");
+Console.WriteLine($"DATABASE_URL: {Environment.GetEnvironmentVariable("DATABASE_URL")}");
+
 // PostgreSQL Configuration - use environment variables for Railway
 var connectionString = Environment.GetEnvironmentVariable("PGHOST") != null
     ? $"Host={Environment.GetEnvironmentVariable("PGHOST")};" +
