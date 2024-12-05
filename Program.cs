@@ -16,16 +16,16 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 Console.WriteLine("Environment Variables:");
 Console.WriteLine($"DATABASE_URL: {Environment.GetEnvironmentVariable("DATABASE_URL")}");
 
-var connectionString = Environment.GetEnvironmentVariable("PGHOST") != null
-    ? $"Host={Environment.GetEnvironmentVariable("PGHOST")};" +
-      $"Database={Environment.GetEnvironmentVariable("PGDATABASE")};" +
-      $"Username={Environment.GetEnvironmentVariable("PGUSER")};" +
-      $"Password={Environment.GetEnvironmentVariable("PGPASSWORD")};" +
-      $"Port={Environment.GetEnvironmentVariable("PGPORT")}"
-    : "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
+// var connectionString = Environment.GetEnvironmentVariable("PGHOST") != null
+//     ? $"Host={Environment.GetEnvironmentVariable("PGHOST")};" +
+//       $"Database={Environment.GetEnvironmentVariable("PGDATABASE")};" +
+//       $"Username={Environment.GetEnvironmentVariable("PGUSER")};" +
+//       $"Password={Environment.GetEnvironmentVariable("PGPASSWORD")};" +
+//       $"Port={Environment.GetEnvironmentVariable("PGPORT")}"
+//     : "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(Environment.GetEnvironmentVariable("DATABASE_URL")));
 
 // Add Controllers and Swagger
 builder.Services.AddControllers();
