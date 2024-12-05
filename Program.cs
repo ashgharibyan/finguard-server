@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using finguard_server.Data;
 using System.Text;
 using Microsoft.OpenApi.Models;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,8 +17,18 @@ Console.WriteLine("Environment Variables:");
 Console.WriteLine($"DATABASE_URL: {Environment.GetEnvironmentVariable("DATABASE_URL")}");
 
 
-var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-                    ?? throw new InvalidOperationException("DATABASE_URL is not configured.");
+var connectionString = new NpgsqlConnectionStringBuilder
+{
+    Host = "aws-0-us-west-1.pooler.supabase.com",
+    Port = 6543,
+    Username = "postgres.bxhsjejnxbzhvpcmrsfh",
+    Password = "tnY10UABIy8qWUbs",
+    Database = "postgres",
+    SslMode = SslMode.Require
+}.ToString();
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(connectionString));
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
