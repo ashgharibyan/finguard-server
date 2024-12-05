@@ -32,10 +32,13 @@ namespace finguard_server.Controllers
         [HttpPost("register")]
         public async Task<ActionResult<string>> Register(UserCreateDto registerDto)
         {
+            _logger.LogInformation("Registering user: {Username}, {Email}", registerDto.Username, registerDto.Email);
+
             try
             {
                 if (await _context.Users.AnyAsync(u => u.Email == registerDto.Email))
                 {
+                    _logger.LogWarning("User with email {Email} already exists", registerDto.Email);
                     return BadRequest("User with this email already exists.");
                 }
 
@@ -46,8 +49,10 @@ namespace finguard_server.Controllers
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password)
                 };
 
+                _logger.LogInformation("Adding user to database...");
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
+                _logger.LogInformation("User added successfully: {UserId}", user.Id);
 
                 var token = GenerateJwtToken(user);
                 return Ok(new { Token = token });
@@ -55,7 +60,7 @@ namespace finguard_server.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during registration");
-                return StatusCode(500, "An error occurred during registration");
+                return StatusCode(500, "An error occurred during registration.");
             }
         }
 
@@ -126,25 +131,37 @@ namespace finguard_server.Controllers
 
         private string GenerateJwtToken(User user)
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
-            var key = Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is not configured."));
+            try
+            {
+                var jwtSettings = _configuration.GetSection("JwtSettings");
+                var key = Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? "YourDefaultDevKey");
 
-            var claims = new List<Claim>
+                _logger.LogInformation("Generating JWT for user: {UserId}, {Email}", user.Id, user.Email);
+
+                var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Email, user.Email),
             new Claim(ClaimTypes.Name, user.Username)
         };
 
-            var token = new JwtSecurityToken(
-                issuer: jwtSettings["Issuer"],
-                audience: jwtSettings["Audience"],
-                claims: claims,
-                expires: DateTime.UtcNow.AddHours(24),
-                signingCredentials: new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256)
-            );
+                var token = new JwtSecurityToken(
+                    issuer: jwtSettings["Issuer"],
+                    audience: jwtSettings["Audience"],
+                    claims: claims,
+                    expires: DateTime.UtcNow.AddHours(24),
+                    signingCredentials: new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256)
+                );
 
-            return new JwtSecurityTokenHandler().WriteToken(token);
+                _logger.LogInformation("Token successfully generated for user: {UserId}", user.Id);
+                return new JwtSecurityTokenHandler().WriteToken(token);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating JWT token");
+                throw;
+            }
         }
+
     }
 }
