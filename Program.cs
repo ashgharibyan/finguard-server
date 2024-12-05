@@ -7,17 +7,27 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Local
+// var port = Environment.GetEnvironmentVariable("PORT") ?? "5064"; // Change to 5064 for consistency
+// builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 // Configure port for Railway
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
-// Set up database path
-var dbPath = Path.Join(Environment.CurrentDirectory, "Data", "finguard.db");
-Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+// Local PostgreSQL connection string
+// var connectionString = "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
 
-// Add services to the container.
+
+// PostgreSQL Configuration
+var connectionString = $"Host={Environment.GetEnvironmentVariable("PGHOST")};" +
+                      $"Database={Environment.GetEnvironmentVariable("PGDATABASE")};" +
+                      $"Username={Environment.GetEnvironmentVariable("PGUSER")};" +
+                      $"Password={Environment.GetEnvironmentVariable("PGPASSWORD")};" +
+                      $"Port={Environment.GetEnvironmentVariable("PGPORT")}";
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite($"Data Source={dbPath}"));
+    options.UseNpgsql(connectionString));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -88,7 +98,7 @@ builder.Services.AddCors(options =>
         )
         .AllowAnyHeader()
         .AllowAnyMethod()
-        .AllowCredentials(); // Add this if you're using credentials
+        .AllowCredentials();
     });
 });
 
@@ -103,23 +113,9 @@ try
         var logger = services.GetRequiredService<ILogger<Program>>();
 
         logger.LogInformation("Starting database migration...");
+        context.Database.Migrate();
+        logger.LogInformation("Migrations applied successfully.");
 
-        // Ensure database is created
-        context.Database.EnsureCreated();
-
-        // Apply any pending migrations
-        if (context.Database.GetPendingMigrations().Any())
-        {
-            logger.LogInformation("Applying pending migrations...");
-            context.Database.Migrate();
-            logger.LogInformation("Migrations applied successfully.");
-        }
-        else
-        {
-            logger.LogInformation("No pending migrations.");
-        }
-
-        // Verify database existence
         if (context.Database.CanConnect())
         {
             logger.LogInformation("Successfully connected to the database.");
@@ -134,16 +130,12 @@ catch (Exception ex)
 {
     var logger = app.Services.GetRequiredService<ILogger<Program>>();
     logger.LogError(ex, "An error occurred while migrating or accessing the database.");
-    throw; // Rethrow to fail the startup if database is not available
+    throw;
 }
 
-// Enable Swagger in all environments for now
 app.UseSwagger();
 app.UseSwaggerUI();
-
-// Enable CORS before other middleware
 app.UseCors("AllowFrontend");
-
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
