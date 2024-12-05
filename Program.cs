@@ -7,11 +7,19 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure port for Railway
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
+// Set up database path
+var dbPath = Path.Join(Environment.CurrentDirectory, "Data", "finguard.db");
+Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+
 // Add services to the container.
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite("Data Source=finguard.db")); // SQLite database file
+    options.UseSqlite($"Data Source={dbPath}"));
 
-builder.Services.AddControllers(); // Register controllers
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
 // Swagger Configuration with JWT Authentication
@@ -45,7 +53,10 @@ builder.Services.AddSwaggerGen(c =>
 
 // JWT Configuration
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var key = Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is not configured."));
+var key = Encoding.UTF8.GetBytes(
+    Environment.GetEnvironmentVariable("JWT_KEY") ??
+    jwtSettings["Key"] ??
+    throw new InvalidOperationException("JWT Key is not configured."));
 
 builder.Services.AddAuthentication(options =>
 {
@@ -71,28 +82,27 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000") // Frontend URL
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy.WithOrigins(
+            "https://finguard-client.vercel.app",
+            "http://localhost:3000"
+        )
+        .AllowAnyHeader()
+        .AllowAnyMethod()
+        .AllowCredentials(); // Add this if you're using credentials
     });
 });
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Enable Swagger in all environments for now
+app.UseSwagger();
+app.UseSwaggerUI();
 
-// Enable CORS
+// Enable CORS before other middleware
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
-
-// app.UseHttpsRedirection();
-app.MapControllers(); // Map controller routes
+app.MapControllers();
 
 app.Run();
