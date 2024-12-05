@@ -7,6 +7,12 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+Console.WriteLine("Environment Variables:");
+foreach (var keyvar in Environment.GetEnvironmentVariables().Keys)
+{
+    Console.WriteLine($"{keyvar}: {Environment.GetEnvironmentVariable(keyvar.ToString())}");
+}
+
 // Configure port for Railway
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
@@ -152,7 +158,7 @@ static string BuildConnectionString()
     var database = Environment.GetEnvironmentVariable("PGDATABASE") ?? throw new InvalidOperationException("PGDATABASE is not set");
 
     Console.WriteLine("--------------------------------------");
-    Console.WriteLine(host, port, username, password, database);
+    Console.WriteLine("Adasdasdsadsad", host, port, username, password, database);
 
     return $"Server={host};Port={port};User Id={username};Password={password};Database={database};SslMode=Require;TrustServerCertificate=True";
 }
