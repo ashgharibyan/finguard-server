@@ -16,20 +16,13 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 Console.WriteLine("Environment Variables:");
 Console.WriteLine($"DATABASE_URL: {Environment.GetEnvironmentVariable("DATABASE_URL")}");
 
-
-var connectionString = new NpgsqlConnectionStringBuilder
-{
-    Host = "aws-0-us-west-1.pooler.supabase.com",
-    Port = 6543,
-    Username = "postgres.bxhsjejnxbzhvpcmrsfh",
-    Password = "tnY10UABIy8qWUbs",
-    Database = "postgres",
-    SslMode = SslMode.Require,
-
-}.ToString();
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+var connectionString = Environment.GetEnvironmentVariable("PGHOST") != null
+    ? $"Host={Environment.GetEnvironmentVariable("PGHOST")};" +
+      $"Database={Environment.GetEnvironmentVariable("PGDATABASE")};" +
+      $"Username={Environment.GetEnvironmentVariable("PGUSER")};" +
+      $"Password={Environment.GetEnvironmentVariable("PGPASSWORD")};" +
+      $"Port={Environment.GetEnvironmentVariable("PGPORT")}"
+    : "Host=localhost;Database=finguard;Username=ashgharibyan;Port=5432";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
@@ -147,4 +140,3 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
-
