@@ -54,7 +54,16 @@ namespace finguard_server.Controllers
                 await _context.SaveChangesAsync();
                 _logger.LogInformation("User added successfully: {UserId}", user.Id);
 
+                if (user.Id == 0 || string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.Username))
+                {
+                    _logger.LogError("User object is invalid: {User}", user);
+                    return StatusCode(500, "An error occurred during registration.");
+                }
+
+                _logger.LogInformation("Generating JWT for user...");
                 var token = GenerateJwtToken(user);
+                _logger.LogInformation("JWT generated successfully");
+
                 return Ok(new { Token = token });
             }
             catch (Exception ex)
@@ -63,6 +72,7 @@ namespace finguard_server.Controllers
                 return StatusCode(500, "An error occurred during registration.");
             }
         }
+
 
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(UserLoginDto loginDto)
