@@ -94,11 +94,47 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+try
 {
-    var services = scope.ServiceProvider;
-    var context = services.GetRequiredService<AppDbContext>();
-    context.Database.Migrate(); // This will create the database and apply migrations
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        var context = services.GetRequiredService<AppDbContext>();
+        var logger = services.GetRequiredService<ILogger<Program>>();
+
+        logger.LogInformation("Starting database migration...");
+
+        // Ensure database is created
+        context.Database.EnsureCreated();
+
+        // Apply any pending migrations
+        if (context.Database.GetPendingMigrations().Any())
+        {
+            logger.LogInformation("Applying pending migrations...");
+            context.Database.Migrate();
+            logger.LogInformation("Migrations applied successfully.");
+        }
+        else
+        {
+            logger.LogInformation("No pending migrations.");
+        }
+
+        // Verify database existence
+        if (context.Database.CanConnect())
+        {
+            logger.LogInformation("Successfully connected to the database.");
+        }
+        else
+        {
+            logger.LogError("Cannot connect to the database!");
+        }
+    }
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "An error occurred while migrating or accessing the database.");
+    throw; // Rethrow to fail the startup if database is not available
 }
 
 // Enable Swagger in all environments for now
