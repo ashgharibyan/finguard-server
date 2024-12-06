@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using finguard_server.Data;
 using finguard_server.Models;
@@ -13,18 +13,26 @@ using System.Text;
 
 namespace finguard_server.Controllers
 {
-
     [ApiController]
     [Route("api/[controller]")]
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly UserManager<ApplicationUser> _userManager;
+        private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IConfiguration _configuration;
         private readonly ILogger<UsersController> _logger;
 
-        public UsersController(AppDbContext context, IConfiguration configuration, ILogger<UsersController> logger)
+        public UsersController(
+            AppDbContext context,
+            UserManager<ApplicationUser> userManager,
+            SignInManager<ApplicationUser> signInManager,
+            IConfiguration configuration,
+            ILogger<UsersController> logger)
         {
             _context = context;
+            _userManager = userManager;
+            _signInManager = signInManager;
             _configuration = configuration;
             _logger = logger;
         }
@@ -32,61 +40,54 @@ namespace finguard_server.Controllers
         [HttpPost("register")]
         public async Task<ActionResult<string>> Register(UserCreateDto registerDto)
         {
-            _logger.LogInformation("Registering user: {Username}, {Email}", registerDto.Username, registerDto.Email);
-
             try
             {
-                if (await _context.Users.AnyAsync(u => u.Email == registerDto.Email))
+                if (await _userManager.FindByEmailAsync(registerDto.Email) != null)
                 {
-                    _logger.LogWarning("User with email {Email} already exists", registerDto.Email);
                     return BadRequest("User with this email already exists.");
                 }
 
-                var user = new User
+                var user = new ApplicationUser
                 {
-                    Username = registerDto.Username,
-                    Email = registerDto.Email,
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(registerDto.Password)
+                    UserName = registerDto.Username,
+                    Email = registerDto.Email
                 };
 
-                _logger.LogInformation("Adding user to database...");
-                _context.Users.Add(user);
-                await _context.SaveChangesAsync();
-                _logger.LogInformation("User added successfully: {UserId}", user.Id);
+                var result = await _userManager.CreateAsync(user, registerDto.Password);
 
-                if (user.Id == 0 || string.IsNullOrEmpty(user.Email) || string.IsNullOrEmpty(user.Username))
+                if (!result.Succeeded)
                 {
-                    _logger.LogError("User object is invalid: {User}", user);
-                    return StatusCode(500, "An error occurred during registration.");
+                    return BadRequest(result.Errors);
                 }
 
-                _logger.LogInformation("Generating JWT for user...");
-                var token = GenerateJwtToken(user);
-                _logger.LogInformation("JWT generated successfully");
-
+                var token = await GenerateJwtToken(user);
                 return Ok(new { Token = token });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during registration");
-                return StatusCode(500, "An error occurred during registration2.");
+                return StatusCode(500, "An error occurred during registration.");
             }
         }
-
 
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(UserLoginDto loginDto)
         {
             try
             {
-                var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == loginDto.Email);
-
-                if (user == null || !BCrypt.Net.BCrypt.Verify(loginDto.Password, user.PasswordHash))
+                var user = await _userManager.FindByEmailAsync(loginDto.Email);
+                if (user == null)
                 {
                     return Unauthorized("Invalid email or password.");
                 }
 
-                var token = GenerateJwtToken(user);
+                var result = await _signInManager.CheckPasswordSignInAsync(user, loginDto.Password, false);
+                if (!result.Succeeded)
+                {
+                    return Unauthorized("Invalid email or password.");
+                }
+
+                var token = await GenerateJwtToken(user);
                 return Ok(new { Token = token });
             }
             catch (Exception ex)
@@ -102,34 +103,37 @@ namespace finguard_server.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                if (string.IsNullOrEmpty(userId))
                 {
-                    return Unauthorized("Invalid token");
+                    return Unauthorized("User ID not found in token");
                 }
 
-                var user = await _context.Users
-                    .Include(u => u.Expenses)
-                    .FirstOrDefaultAsync(u => u.Id == userId);
-
+                var user = await _userManager.FindByIdAsync(userId);
                 if (user == null)
                 {
                     return NotFound("User not found");
                 }
 
-                return Ok(new UserReadDto
-                {
-                    Id = user.Id,
-                    Username = user.Username,
-                    Email = user.Email,
-                    Expenses = user.Expenses.Select(e => new ExpenseDto
+                var expenses = await _context.Expenses
+                    .Where(e => e.CreatedById == userId)
+                    .Select(e => new ExpenseDto
                     {
                         Id = e.Id,
                         Description = e.Description,
                         Amount = e.Amount,
-                        Date = e.Date
-                    }).ToList()
+                        Date = e.Date,
+                        CreatedBy = e.CreatedByEmail ?? "Unknown",
+                        CreatedAt = e.CreatedAt
+                    })
+                    .ToListAsync();
+
+                return Ok(new UserReadDto
+                {
+                    Id = user.Id,  // No more parsing to int
+                    Username = user.UserName ?? "Unknown",
+                    Email = user.Email ?? "Unknown",
+                    Expenses = expenses
                 });
             }
             catch (Exception ex)
@@ -139,46 +143,42 @@ namespace finguard_server.Controllers
             }
         }
 
-        private string GenerateJwtToken(User user)
+        private async Task<string> GenerateJwtToken(ApplicationUser user)
         {
-            try
+            if (user.Id == null || user.Email == null || user.UserName == null)
             {
-                var jwtSettings = _configuration.GetSection("JwtSettings");
-                var key = _configuration["JwtSettings:Key"];
-
-                if (string.IsNullOrEmpty(key))
-                {
-                    _logger.LogError("JWT Key is missing from configuration");
-                    throw new InvalidOperationException("JWT Key is not configured.");
-                }
-
-                _logger.LogInformation("Generating JWT for user: {UserId}, {Email}", user.Id, user.Email);
-
-                var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Email, user.Email),
-            new Claim(ClaimTypes.Name, user.Username)
-        };
-
-                var token = new JwtSecurityToken(
-                    issuer: jwtSettings["Issuer"],
-                    audience: jwtSettings["Audience"],
-                    claims: claims,
-                    expires: DateTime.UtcNow.AddMinutes(Convert.ToInt32(jwtSettings["ExpiryMinutes"] ?? "60")),
-                    signingCredentials: new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256)
-                );
-
-                _logger.LogInformation("Token successfully generated for user: {UserId}", user.Id);
-                return new JwtSecurityTokenHandler().WriteToken(token);
+                throw new ArgumentException("User information is incomplete");
             }
-            catch (Exception ex)
+
+            var jwtKey = _configuration["JwtSettings:Key"];
+            if (string.IsNullOrEmpty(jwtKey))
             {
-                _logger.LogError(ex, "Error generating JWT token");
-                throw;
+                throw new InvalidOperationException("JWT key is not configured");
             }
+
+            var claims = new List<Claim>
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id),
+        new Claim(ClaimTypes.Email, user.Email),
+        new Claim(ClaimTypes.Name, user.UserName)
+    };
+
+            var userRoles = await _userManager.GetRolesAsync(user);
+            claims.AddRange(userRoles.Select(role => new Claim(ClaimTypes.Role, role)));
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var expires = DateTime.UtcNow.AddMinutes(Convert.ToDouble(_configuration["JwtSettings:ExpiryMinutes"] ?? "60"));
+
+            var token = new JwtSecurityToken(
+                issuer: _configuration["JwtSettings:Issuer"],
+                audience: _configuration["JwtSettings:Audience"],
+                claims: claims,
+                expires: expires,
+                signingCredentials: creds
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
-
-
     }
 }

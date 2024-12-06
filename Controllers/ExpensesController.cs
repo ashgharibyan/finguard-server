@@ -1,9 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using finguard_server.Data;
 using finguard_server.Models;
 using FinguardServer.Dtos;
-using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 
 namespace finguard_server.Controllers
@@ -27,21 +27,16 @@ namespace finguard_server.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
-                {
-                    return Unauthorized("Invalid token");
-                }
-
+                // Now we get all expenses, not just user-specific ones
                 var expenses = await _context.Expenses
-                    .Where(e => e.UserId == userId)
                     .Select(e => new ExpenseDto
                     {
                         Id = e.Id,
                         Description = e.Description,
                         Amount = e.Amount,
-                        Date = e.Date
+                        Date = e.Date,
+                        CreatedBy = e.CreatedByEmail,
+                        CreatedAt = e.CreatedAt
                     })
                     .ToListAsync();
 
@@ -59,15 +54,8 @@ namespace finguard_server.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-
-                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
-                {
-                    return Unauthorized("Invalid token");
-                }
-
                 var expense = await _context.Expenses
-                    .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
+                    .FirstOrDefaultAsync(e => e.Id == id);
 
                 if (expense == null)
                 {
@@ -79,7 +67,9 @@ namespace finguard_server.Controllers
                     Id = expense.Id,
                     Description = expense.Description,
                     Amount = expense.Amount,
-                    Date = expense.Date
+                    Date = expense.Date,
+                    CreatedBy = expense.CreatedByEmail,
+                    CreatedAt = expense.CreatedAt
                 });
             }
             catch (Exception ex)
@@ -94,11 +84,12 @@ namespace finguard_server.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var userEmail = User.FindFirstValue(ClaimTypes.Email);
 
-                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
+                if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(userEmail))
                 {
-                    return Unauthorized("Invalid token");
+                    return Unauthorized("User information not found in token");
                 }
 
                 var expense = new Expense
@@ -106,7 +97,9 @@ namespace finguard_server.Controllers
                     Description = expenseDto.Description,
                     Amount = expenseDto.Amount,
                     Date = expenseDto.Date,
-                    UserId = userId
+                    CreatedById = userId,
+                    CreatedByEmail = userEmail,
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 _context.Expenses.Add(expense);
@@ -120,7 +113,9 @@ namespace finguard_server.Controllers
                         Id = expense.Id,
                         Description = expense.Description,
                         Amount = expense.Amount,
-                        Date = expense.Date
+                        Date = expense.Date,
+                        CreatedBy = expense.CreatedByEmail,
+                        CreatedAt = expense.CreatedAt
                     });
             }
             catch (Exception ex)
@@ -135,19 +130,25 @@ namespace finguard_server.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                _logger.LogInformation($"Update attempt - User ID: {userId}");
 
-                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
-                {
-                    return Unauthorized("Invalid token");
-                }
-
-                var expense = await _context.Expenses
-                    .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
+                var expense = await _context.Expenses.FindAsync(id);
 
                 if (expense == null)
                 {
+                    _logger.LogWarning($"Expense not found - ID: {id}");
                     return NotFound("Expense not found");
+                }
+
+                _logger.LogInformation($"Expense creator ID: {expense.CreatedById}");
+                _logger.LogInformation($"Current user ID: {userId}");
+
+                // Check if the current user is the creator of the expense
+                if (!string.Equals(expense.CreatedById, userId, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning($"Unauthorized update attempt - User {userId} trying to update expense created by {expense.CreatedById}");
+                    return Unauthorized("You can only update your own expenses");
                 }
 
                 expense.Description = expenseDto.Description;
@@ -161,7 +162,9 @@ namespace finguard_server.Controllers
                     Id = expense.Id,
                     Description = expense.Description,
                     Amount = expense.Amount,
-                    Date = expense.Date
+                    Date = expense.Date,
+                    CreatedBy = expense.CreatedByEmail,
+                    CreatedAt = expense.CreatedAt
                 });
             }
             catch (Exception ex)
@@ -176,19 +179,25 @@ namespace finguard_server.Controllers
         {
             try
             {
-                var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                _logger.LogInformation($"Delete attempt - User ID: {userId}");
 
-                if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
-                {
-                    return Unauthorized("Invalid token");
-                }
-
-                var expense = await _context.Expenses
-                    .FirstOrDefaultAsync(e => e.Id == id && e.UserId == userId);
+                var expense = await _context.Expenses.FindAsync(id);
 
                 if (expense == null)
                 {
+                    _logger.LogWarning($"Expense not found - ID: {id}");
                     return NotFound("Expense not found");
+                }
+
+                _logger.LogInformation($"Expense creator ID: {expense.CreatedById}");
+                _logger.LogInformation($"Current user ID: {userId}");
+
+                // Check if the current user is the creator of the expense
+                if (!string.Equals(expense.CreatedById, userId, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning($"Unauthorized delete attempt - User {userId} trying to delete expense created by {expense.CreatedById}");
+                    return Unauthorized("You can only delete your own expenses");
                 }
 
                 _context.Expenses.Remove(expense);
