@@ -145,10 +145,6 @@ namespace finguard_server.Controllers
             {
                 var jwtSettings = _configuration.GetSection("JwtSettings");
                 var key = _configuration["JwtSettings:Key"];
-                Console.WriteLine("--------------------------------------");
-                Console.WriteLine("--------------------------------------");
-                Console.WriteLine("--------------------------------------");
-                Console.WriteLine($"JWT Key from app settings:", key);
 
                 if (string.IsNullOrEmpty(key))
                 {

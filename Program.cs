@@ -8,12 +8,7 @@ using Microsoft.AspNetCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Log all environment variables
-Console.WriteLine("Environment Variables:");
-foreach (var keyvar in Environment.GetEnvironmentVariables().Keys)
-{
-    Console.WriteLine($"{keyvar}: {Environment.GetEnvironmentVariable(keyvar.ToString())}");
-}
+
 
 // Configure port for Railway
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
@@ -39,7 +34,7 @@ builder.Services.AddSwaggerGen(c =>
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Enter 'Bearer' [space] and then your token.\n\nExample: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        Description = "Enter your token.\n\nExample: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
     });
 
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -58,7 +53,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// JWT Configuration - Updated to use both environment variables and appsettings.json
+// JWT Configuration
 var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") ?? builder.Configuration["JwtSettings:Key"];
 var jwtIssuer = builder.Configuration["JwtSettings:Issuer"];
 var jwtAudience = builder.Configuration["JwtSettings:Audience"];
@@ -194,8 +189,6 @@ static string BuildConnectionString()
     var password = Environment.GetEnvironmentVariable("PGPASSWORD") ?? throw new InvalidOperationException("PGPASSWORD is not set");
     var database = Environment.GetEnvironmentVariable("PGDATABASE") ?? throw new InvalidOperationException("PGDATABASE is not set");
 
-    Console.WriteLine("--------------------------------------");
-    Console.WriteLine("Adasdasdsadsad", host, port, username, password, database);
 
     return $"Server={host};Port={port};User Id={username};Password={password};Database={database};SslMode=Require;TrustServerCertificate=True";
 }
